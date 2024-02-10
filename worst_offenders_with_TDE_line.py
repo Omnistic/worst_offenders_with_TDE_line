@@ -1,5 +1,6 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import zospy as zp
-from itertools import groupby 
 
 
 # List of columns to be ignored when listing the TDE operands
@@ -61,6 +62,9 @@ def get_offenders(oss):
     data_summary = tolerance_data_viewer.Summary
     tolerance_data_viewer.Close()
 
+    # Get the nominal criterion
+    nominal_criterion = float(data_summary[data_summary.find("Nominal Criterion   : ")+22:].split("\n")[0])
+
     # Parse the summary to extract Sensitivity Analysis worst offenders
     worst_offenders = data_summary[data_summary.find("Worst offenders:"):data_summary.find("Estimated Performance Changes based upon Root-Sum-Square method")].split("\n")[2:-3]
     for offender in worst_offenders:
@@ -96,11 +100,11 @@ def get_offenders(oss):
         offenders_listing.append(offender_data)
         offenses_listing.append(offense_data)
 
-    return offenders_listing, offenses_listing
+    return offenders_listing, offenses_listing, nominal_criterion
 
 # Report the worst offenders along with their corresponding TDE line number as well as
 # the value, criterion, and change
-def tde_operands_by_offense(tde_listing, offenders_listing, offenses_listing):
+def tde_operands_by_offense(tde_listing, offenders_listing, offenses_listing, nominal_criterion):
     for offender_id, offender in enumerate(offenders_listing):
         offenders_listing[offender_id]["TdeLine"] = tde_listing.index(offender)+1
 
@@ -117,6 +121,24 @@ def tde_operands_by_offense(tde_listing, offenders_listing, offenses_listing):
                                                                               offense["Value"],
                                                                               offense["Criterion"],
                                                                               offense["Change"]))
+    
+    tde_lines = [offender["TdeLine"] for offender in offenders_listing]
+    types = [offender["Type"] for offender in offenders_listing]
+    custom_labels = [str(tde_line) + ": " + type for tde_line, type in zip(tde_lines, types)]
+    changes = [offense["Change"] for offense in offenses_listing]
+    
+    plt.style.use('dark_background')
+    colors = ['chocolate' if change >= 0 else 'lightgreen' for change in changes]
+
+    fig, ax = plt.subplots()
+    y_positions = np.arange(len(custom_labels))
+    ax.barh(y_positions, changes, align="center", left=nominal_criterion, color=colors)
+    ax.set_yticks(y_positions, labels=custom_labels)
+    ax.invert_yaxis()
+    ax.set_xlabel("Criterion")
+    ax.set_title("Worst offenders")
+    plt.axvline(x=nominal_criterion, color="skyblue")
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -129,7 +151,7 @@ if __name__ == "__main__":
     tde_listing = get_tde_operands(oss)
 
     # List the worst offenders
-    offenders_listing, offenses_listing = get_offenders(oss)
+    offenders_listing, offenses_listing, nominal_criterion = get_offenders(oss)
 
     # Report the worst offenders with the additional corresponding TDE line number
-    tde_operands_by_offense(tde_listing, offenders_listing, offenses_listing)
+    tde_operands_by_offense(tde_listing, offenders_listing, offenses_listing, nominal_criterion)
